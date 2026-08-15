@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { LinkRow } from "@/lib/types";
+import type { ExistingLinkSummary, LinkRow } from "@/lib/types";
 import { getDomain, formatDate } from "@/lib/format";
+import { UNCATEGORIZED_TOPIC } from "@/lib/constants";
 import StatusBadge from "./StatusBadge";
 import TopicBadge from "./TopicBadge";
 
@@ -18,6 +19,7 @@ export default function AddLinkForm({
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState<ExistingLinkSummary | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const hasPending = links.some((l) => l.status === "pending");
@@ -53,6 +55,7 @@ export default function AddLinkForm({
     if (!url.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
+    setDuplicate(null);
     try {
       const res = await fetch("/api/links", {
         method: "POST",
@@ -61,7 +64,11 @@ export default function AddLinkForm({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed to add link");
+        if (res.status === 409 && data.existing) {
+          setDuplicate(data.existing as ExistingLinkSummary);
+        } else {
+          setError(data.error || "Failed to add link");
+        }
         return;
       }
       setUrl("");
@@ -71,6 +78,13 @@ export default function AddLinkForm({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function existingLinkHref(existing: ExistingLinkSummary): string {
+    // A pending link doesn't have a settled topic page yet — point at its
+    // spot on the timeline instead.
+    if (existing.status === "pending") return `/timeline#link-${existing.id}`;
+    return `/topics/${encodeURIComponent(existing.topic || UNCATEGORIZED_TOPIC)}`;
   }
 
   async function handleRetry(id: number) {
@@ -92,7 +106,10 @@ export default function AddLinkForm({
           required
           placeholder="https://example.com/some-article"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (duplicate) setDuplicate(null);
+          }}
           className="flex-1 rounded-md border border-black/15 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/40 dark:border-white/15 dark:focus:border-white/40"
         />
         <button
@@ -104,6 +121,14 @@ export default function AddLinkForm({
         </button>
       </form>
       {error && <p className="-mt-4 text-sm text-red-600">{error}</p>}
+      {duplicate && (
+        <p className="-mt-4 text-sm text-black/60 dark:text-white/60">
+          Already saved —{" "}
+          <a href={existingLinkHref(duplicate)} className="underline">
+            {duplicate.title || duplicate.url}
+          </a>
+        </p>
+      )}
 
       <div>
         <h2 className="mb-3 text-sm font-medium text-black/60 dark:text-white/60">

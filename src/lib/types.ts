@@ -13,3 +13,10 @@ export interface LinkRow {
   created_at: string;
   status: LinkStatus;
 }
+
+// Subset of LinkRow returned by POST /api/links on a 409 duplicate response —
+// enough for the frontend to link back to the existing entry.
+export type ExistingLinkSummary = Pick<
+  LinkRow,
+  "id" | "url" | "title" | "topic" | "status" | "created_at"
+>;

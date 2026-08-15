@@ -3,6 +3,7 @@ import type { LinkRow } from "./types";
 import { UNCATEGORIZED_TOPIC } from "./constants";
 import { scrapeUrl } from "./scrape";
 import { categorizeLink } from "./anthropic";
+import { normalizeUrl } from "./format";
 
 export function getAllLinks(): LinkRow[] {
   return getDb()
@@ -59,6 +60,17 @@ export function getLinksByTopic(topic: string): LinkRow[] {
       "SELECT * FROM links WHERE topic = ? AND status != 'failed' ORDER BY created_at DESC, id DESC"
     )
     .all(topic) as LinkRow[];
+}
+
+/**
+ * Find an existing link whose normalized URL matches, regardless of status —
+ * a pending/failed row still counts as "already saved" for dedupe purposes.
+ * O(n) over all links, which is fine at this app's demo scale; revisit with
+ * a stored+indexed normalized_url column if that ever stops being true.
+ */
+export function findDuplicateLink(url: string): LinkRow | undefined {
+  const normalized = normalizeUrl(url);
+  return getAllLinks().find((link) => normalizeUrl(link.url) === normalized);
 }
 
 /**
@@ -129,4 +141,12 @@ export async function processLink(id: number): Promise<void> {
 export async function retryLink(id: number): Promise<void> {
   getDb().prepare("UPDATE links SET status = 'pending' WHERE id = ?").run(id);
   await processLink(id);
+}
+
+/**
+ * Delete a link by id. Returns whether a row was actually removed.
+ */
+export function deleteLink(id: number): boolean {
+  const info = getDb().prepare("DELETE FROM links WHERE id = ?").run(id);
+  return info.changes > 0;
 }

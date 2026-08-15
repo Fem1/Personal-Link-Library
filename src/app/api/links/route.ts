@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPendingLink, getAllLinks, processLink } from "@/lib/linkService";
+import {
+  createPendingLink,
+  findDuplicateLink,
+  getAllLinks,
+  processLink,
+} from "@/lib/linkService";
 
 export async function GET() {
   const links = getAllLinks();
@@ -27,6 +32,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "url must be a valid http(s) URL" },
       { status: 400 }
+    );
+  }
+
+  const duplicate = findDuplicateLink(parsed.toString());
+  if (duplicate) {
+    return NextResponse.json(
+      {
+        error: "Already saved",
+        existing: {
+          id: duplicate.id,
+          url: duplicate.url,
+          title: duplicate.title,
+          topic: duplicate.topic,
+          status: duplicate.status,
+          created_at: duplicate.created_at,
+        },
+      },
+      { status: 409 }
     );
   }
 
