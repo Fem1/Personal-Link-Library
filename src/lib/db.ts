@@ -6,19 +6,22 @@ import fs from "fs";
 const DB_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DB_DIR, "link-library.db");
 
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
-
 // Reuse a single connection across hot-reloads in dev.
 declare global {
-  // eslint-disable-next-line no-var
   var __linkLibraryDb: Database.Database | undefined;
 }
 
 function createConnection(): Database.Database {
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  }
+
   const db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
+  // Wait rather than throwing SQLITE_BUSY if something else briefly holds
+  // the file lock (e.g. Next's build-time page-data collection running
+  // multiple workers).
+  db.pragma("busy_timeout = 5000");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS links (
@@ -36,23 +39,18 @@ function createConnection(): Database.Database {
   return db;
 }
 
-export const db = global.__linkLibraryDb ?? createConnection();
-
-if (process.env.NODE_ENV !== "production") {
-  global.__linkLibraryDb = db;
+// Lazy singleton: the connection is opened on first use, not at module
+// load time. Route/page modules are imported (and thus evaluated) during
+// Next's build-time page-data collection, which runs several workers in
+// parallel — eagerly opening the DB there causes SQLITE_BUSY lock
+// contention between workers touching the same file at once.
+export function getDb(): Database.Database {
+  if (!global.__linkLibraryDb) {
+    global.__linkLibraryDb = createConnection();
+  }
+  return global.__linkLibraryDb;
 }
 
-export type LinkStatus = "pending" | "ready" | "failed";
-
-export interface LinkRow {
-  id: number;
-  url: string;
-  title: string | null;
-  description: string | null;
-  full_text: string | null;
-  topic: string | null;
-  created_at: string;
-  status: LinkStatus;
-}
-
-export const UNCATEGORIZED_TOPIC = "Uncategorized";
+// Types and constants live in ./types and ./constants (zero runtime
+// imports), so client components can use them without pulling this file's
+// better-sqlite3 dependency into the browser bundle. Import those directly.

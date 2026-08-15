@@ -1,42 +1,52 @@
-import { db, LinkRow, UNCATEGORIZED_TOPIC } from "./db";
+import { getDb } from "./db";
+import type { LinkRow } from "./types";
+import { UNCATEGORIZED_TOPIC } from "./constants";
 import { scrapeUrl } from "./scrape";
 import { categorizeLink } from "./anthropic";
 
 export function getAllLinks(): LinkRow[] {
-  return db
+  return getDb()
     .prepare("SELECT * FROM links ORDER BY created_at DESC, id DESC")
     .all() as LinkRow[];
 }
 
 export function getRecentLinks(limit: number): LinkRow[] {
-  return db
+  return getDb()
     .prepare("SELECT * FROM links ORDER BY created_at DESC, id DESC LIMIT ?")
     .all(limit) as LinkRow[];
 }
 
 export function getLinkById(id: number): LinkRow | undefined {
-  return db.prepare("SELECT * FROM links WHERE id = ?").get(id) as
+  return getDb().prepare("SELECT * FROM links WHERE id = ?").get(id) as
     | LinkRow
     | undefined;
 }
 
 export function getDistinctTopics(): { topic: string; count: number }[] {
-  const rows = db
+  // Group by the CASE expression itself, not the "topic" alias -- SQLite
+  // resolves a GROUP BY name against a same-named source column before an
+  // output alias, so `GROUP BY topic` here would silently group by the raw
+  // (pre-CASE) links.topic column instead, splitting the virtual
+  // Uncategorized bucket into separate NULL and 'Uncategorized' groups.
+  const rows = getDb()
     .prepare(
       `SELECT
          CASE WHEN status = 'failed' OR topic IS NULL THEN ? ELSE topic END AS topic,
          COUNT(*) as count
        FROM links
-       GROUP BY topic
+       GROUP BY CASE WHEN status = 'failed' OR topic IS NULL THEN ? ELSE topic END
        ORDER BY topic ASC`
     )
-    .all(UNCATEGORIZED_TOPIC) as { topic: string; count: number }[];
+    .all(UNCATEGORIZED_TOPIC, UNCATEGORIZED_TOPIC) as {
+    topic: string;
+    count: number;
+  }[];
   return rows;
 }
 
 export function getLinksByTopic(topic: string): LinkRow[] {
   if (topic === UNCATEGORIZED_TOPIC) {
-    return db
+    return getDb()
       .prepare(
         `SELECT * FROM links
          WHERE status = 'failed' OR topic IS NULL
@@ -44,7 +54,7 @@ export function getLinksByTopic(topic: string): LinkRow[] {
       )
       .all() as LinkRow[];
   }
-  return db
+  return getDb()
     .prepare(
       "SELECT * FROM links WHERE topic = ? AND status != 'failed' ORDER BY created_at DESC, id DESC"
     )
@@ -55,10 +65,8 @@ export function getLinksByTopic(topic: string): LinkRow[] {
  * Insert a pending link row, returning it immediately.
  */
 export function createPendingLink(url: string): LinkRow {
-  const info = db
-    .prepare(
-      "INSERT INTO links (url, status) VALUES (?, 'pending')"
-    )
+  const info = getDb()
+    .prepare("INSERT INTO links (url, status) VALUES (?, 'pending')")
     .run(url);
   return getLinkById(info.lastInsertRowid as number)!;
 }
@@ -79,7 +87,11 @@ export async function processLink(id: number): Promise<void> {
       .map((t) => t.topic)
       .filter((t) => t !== UNCATEGORIZED_TOPIC);
 
-    let topic: string;
+    // Leave topic NULL (rather than writing the literal "Uncategorized"
+    // string) so a categorization failure lands in the same virtual
+    // Uncategorized bucket as a failed scrape, instead of a second,
+    // colliding "real" topic of the same name.
+    let topic: string | null;
     try {
       topic = await categorizeLink({
         title,
@@ -89,20 +101,24 @@ export async function processLink(id: number): Promise<void> {
       });
     } catch {
       // Categorization failing shouldn't sink an otherwise-successful scrape.
-      topic = UNCATEGORIZED_TOPIC;
+      topic = null;
     }
 
-    db.prepare(
-      `UPDATE links
-       SET title = ?, description = ?, full_text = ?, topic = ?, status = 'ready'
-       WHERE id = ?`
-    ).run(title, description, fullText, topic, id);
+    getDb()
+      .prepare(
+        `UPDATE links
+         SET title = ?, description = ?, full_text = ?, topic = ?, status = 'ready'
+         WHERE id = ?`
+      )
+      .run(title, description, fullText, topic, id);
   } catch (err) {
-    db.prepare(
-      `UPDATE links
-       SET status = 'failed', title = COALESCE(title, ?)
-       WHERE id = ?`
-    ).run(link.url, id);
+    getDb()
+      .prepare(
+        `UPDATE links
+         SET status = 'failed', title = COALESCE(title, ?)
+         WHERE id = ?`
+      )
+      .run(link.url, id);
     console.error(`Failed to process link ${id} (${link.url}):`, err);
   }
 }
@@ -111,6 +127,6 @@ export async function processLink(id: number): Promise<void> {
  * Retry a failed (or re-process any) link.
  */
 export async function retryLink(id: number): Promise<void> {
-  db.prepare("UPDATE links SET status = 'pending' WHERE id = ?").run(id);
+  getDb().prepare("UPDATE links SET status = 'pending' WHERE id = ?").run(id);
   await processLink(id);
 }
