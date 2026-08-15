@@ -47,3 +47,5 @@ next-env.d.ts
 # (pushed via GitHub API which can't carry binaries/huge files as inline text;
 # regenerate with `npm install`)
 /package-lock.json
+/src/app/favicon.ico
+/public/*.svg
