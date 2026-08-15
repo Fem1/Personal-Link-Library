@@ -12,6 +12,7 @@ export interface LinkRow {
   topic: string | null;
   created_at: string;
   status: LinkStatus;
+  image_url: string | null;
 }
 
 // Subset of LinkRow returned by POST /api/links on a 409 duplicate response —

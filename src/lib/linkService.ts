@@ -36,7 +36,7 @@ export function getDistinctTopics(): { topic: string; count: number }[] {
          COUNT(*) as count
        FROM links
        GROUP BY CASE WHEN status = 'failed' OR topic IS NULL THEN ? ELSE topic END
-       ORDER BY topic ASC`
+       ORDER BY count DESC`
     )
     .all(UNCATEGORIZED_TOPIC, UNCATEGORIZED_TOPIC) as {
     topic: string;
@@ -93,7 +93,7 @@ export async function processLink(id: number): Promise<void> {
   if (!link) return;
 
   try {
-    const { title, description, fullText } = await scrapeUrl(link.url);
+    const { title, description, fullText, imageUrl } = await scrapeUrl(link.url);
 
     const existingTopics = getDistinctTopics()
       .map((t) => t.topic)
@@ -119,10 +119,10 @@ export async function processLink(id: number): Promise<void> {
     getDb()
       .prepare(
         `UPDATE links
-         SET title = ?, description = ?, full_text = ?, topic = ?, status = 'ready'
+         SET title = ?, description = ?, full_text = ?, topic = ?, image_url = ?, status = 'ready'
          WHERE id = ?`
       )
-      .run(title, description, fullText, topic, id);
+      .run(title, description, fullText, topic, imageUrl, id);
   } catch (err) {
     getDb()
       .prepare(

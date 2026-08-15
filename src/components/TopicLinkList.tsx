@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LinkRow } from "@/lib/types";
 import { getDomain, formatDate } from "@/lib/format";
 import DeleteLinkButton from "./DeleteLinkButton";
+import LinkThumbnail from "./LinkThumbnail";
 
 export default function TopicLinkList({
   initialLinks,
@@ -40,6 +41,7 @@ export default function TopicLinkList({
       <ul className="flex flex-col divide-y divide-black/10 dark:divide-white/10">
         {links.map((link) => (
           <li key={link.id} className="flex items-start gap-3 py-3">
+            <LinkThumbnail src={link.image_url} />
             <div className="min-w-0 flex-1">
               <a
                 href={link.url}

@@ -6,6 +6,7 @@ import { getDomain, formatDate } from "@/lib/format";
 import StatusBadge from "./StatusBadge";
 import TopicBadge from "./TopicBadge";
 import DeleteLinkButton from "./DeleteLinkButton";
+import LinkThumbnail from "./LinkThumbnail";
 
 export default function TimelineList({
   initialLinks,
@@ -38,6 +39,7 @@ export default function TimelineList({
           id={`link-${link.id}`}
           className="flex items-center gap-3 py-3 scroll-mt-4 target:bg-amber-50 dark:target:bg-amber-900/10"
         >
+          <LinkThumbnail src={link.image_url} />
           <div className="min-w-0 flex-1">
             <a
               href={link.url}

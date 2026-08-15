@@ -32,9 +32,20 @@ function createConnection(): Database.Database {
       full_text TEXT,
       topic TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      status TEXT NOT NULL DEFAULT 'pending'
+      status TEXT NOT NULL DEFAULT 'pending',
+      image_url TEXT
     );
   `);
+
+  // Lightweight migration for DBs created before image_url existed —
+  // CREATE TABLE IF NOT EXISTS above is a no-op once the table already
+  // exists, so a pre-existing file needs the column added explicitly.
+  const columns = db.prepare("PRAGMA table_info(links)").all() as {
+    name: string;
+  }[];
+  if (!columns.some((c) => c.name === "image_url")) {
+    db.exec("ALTER TABLE links ADD COLUMN image_url TEXT");
+  }
 
   return db;
 }
