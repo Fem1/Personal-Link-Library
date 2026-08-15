@@ -42,3 +42,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lockfile + default scaffold assets omitted from this session's git history
+# (pushed via GitHub API which can't carry binaries/huge files as inline text;
+# regenerate with `npm install`)
+/package-lock.json
