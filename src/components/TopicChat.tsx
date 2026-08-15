@@ -50,12 +50,15 @@ export default function TopicChat({ topic }: { topic: string }) {
   }
 
   return (
-    <div className="flex flex-col rounded-lg border border-black/10 dark:border-white/10">
-      <div className="border-b border-black/10 px-4 py-3 text-sm font-medium dark:border-white/10">
+    <div className="flex h-full min-h-0 flex-col rounded-lg border border-black/10 dark:border-white/10">
+      <div className="flex-shrink-0 border-b border-black/10 px-4 py-3 text-sm font-medium dark:border-white/10">
         Chat about &ldquo;{topic}&rdquo;
       </div>
 
-      <div className="flex max-h-96 min-h-32 flex-col gap-3 overflow-y-auto px-4 py-4">
+      {/* Mobile: fixed-height scroll box (unchanged). Desktop: fills
+          whatever height the column has, scrolling internally, while the
+          header above and input below stay pinned. */}
+      <div className="flex max-h-96 min-h-32 flex-col gap-3 overflow-y-auto px-4 py-4 md:max-h-none md:min-h-0 md:flex-1">
         {messages.length === 0 && (
           <p className="text-sm text-black/40 dark:text-white/40">
             Ask a question — answers are grounded only in the links saved
@@ -85,7 +88,7 @@ export default function TopicChat({ topic }: { topic: string }) {
 
       <form
         onSubmit={handleSubmit}
-        className="flex gap-2 border-t border-black/10 p-3 dark:border-white/10"
+        className="flex flex-shrink-0 gap-2 border-t border-black/10 p-3 dark:border-white/10"
       >
         <input
           type="text"

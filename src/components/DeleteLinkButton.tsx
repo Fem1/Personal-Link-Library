@@ -36,7 +36,7 @@ export default function DeleteLinkButton({
 
   if (confirming) {
     return (
-      <div className="flex items-center gap-2 text-xs">
+      <div className="flex flex-shrink-0 items-center gap-2 text-xs whitespace-nowrap">
         {error && <span className="text-red-600">Failed</span>}
         <button
           onClick={handleConfirm}
@@ -61,7 +61,7 @@ export default function DeleteLinkButton({
       onClick={() => setConfirming(true)}
       aria-label="Delete link"
       title="Delete link"
-      className="rounded p-1 text-black/40 transition-colors hover:bg-red-100 hover:text-red-600 dark:text-white/40 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+      className="flex-shrink-0 rounded p-1 text-black/40 transition-colors hover:bg-red-100 hover:text-red-600 dark:text-white/40 dark:hover:bg-red-900/30 dark:hover:text-red-400"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

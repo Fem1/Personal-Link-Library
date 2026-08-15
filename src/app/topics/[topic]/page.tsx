@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLinksByTopic } from "@/lib/linkService";
-import TopicChat from "@/components/TopicChat";
-import TopicLinkList from "@/components/TopicLinkList";
+import TopicPageLayout from "@/components/TopicPageLayout";
 
 // Reads straight from SQLite on every request — never statically cache.
 export const dynamic = "force-dynamic";
@@ -30,9 +29,7 @@ export default async function TopicDetailPage({
         <h1 className="mt-1 text-xl font-semibold">{decoded}</h1>
       </div>
 
-      <TopicLinkList initialLinks={links} topic={decoded} />
-
-      <TopicChat topic={decoded} />
+      <TopicPageLayout topic={decoded} initialLinks={links} />
     </div>
   );
 }

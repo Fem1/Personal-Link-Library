@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LinkRow } from "@/lib/types";
-import { getDomain, formatDate } from "@/lib/format";
 import DeleteLinkButton from "./DeleteLinkButton";
 import LinkThumbnail from "./LinkThumbnail";
 
@@ -34,32 +33,27 @@ export default function TopicLinkList({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-black/50 dark:text-white/50">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <p className="flex-shrink-0 text-xs text-black/50 dark:text-white/50">
         {links.length} {links.length === 1 ? "link" : "links"}
       </p>
-      <ul className="flex flex-col divide-y divide-black/10 dark:divide-white/10">
+      {/* Mobile: natural height, page scrolls (unchanged). Desktop: bounded
+          to the sidebar's available height, scrolling independently of
+          the rest of the page. */}
+      <ul className="flex flex-col divide-y divide-black/10 dark:divide-white/10 md:min-h-0 md:flex-1 md:overflow-y-auto">
         {links.map((link) => (
-          <li key={link.id} className="flex items-start gap-3 py-3">
-            <LinkThumbnail src={link.image_url} />
-            <div className="min-w-0 flex-1">
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium hover:underline"
-              >
+          <li key={link.id} className="flex items-center gap-2 py-2">
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-0 flex-1 items-center gap-2 hover:underline"
+            >
+              <LinkThumbnail src={link.image_url} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {link.title || link.url}
-              </a>
-              <div className="mt-1 text-xs text-black/50 dark:text-white/50">
-                {getDomain(link.url)} · {formatDate(link.created_at)}
-              </div>
-              {link.description && (
-                <p className="mt-1 text-sm text-black/70 dark:text-white/70">
-                  {link.description}
-                </p>
-              )}
-            </div>
+              </span>
+            </a>
             <DeleteLinkButton id={link.id} onDeleted={handleDeleted} />
           </li>
         ))}
