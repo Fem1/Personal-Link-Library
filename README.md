@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Link Library
 
-## Getting Started
+A local, single-user demo app: paste in links, it scrapes them, auto-categorizes
+them by topic using Claude, and gives you a chat box per topic to interrogate
+everything you've saved on that subject.
 
-First, run the development server:
+No auth, no multi-user support — this is designed to run on `localhost` for
+one person.
+
+## How it works
+
+1. You paste a URL on **[/add](#pages)**.
+2. The link is saved immediately with `status: 'pending'`.
+3. In the background, the server fetches the page, extracts the title,
+   description, and main article text (via [Readability](https://github.com/mozilla/readability)),
+   then asks Claude to assign it to an existing topic or propose a new one.
+4. The link's row updates to `status: 'ready'` (or `'failed'` if the fetch or
+   extraction didn't work out — you can retry it from the UI).
+5. Browse everything chronologically on **/timeline**, or grouped by topic on
+   **/topics**. Each topic page has a chat box scoped to just that topic's
+   saved content — Claude answers only from what you've saved and cites which
+   link(s) it's drawing from.
+
+Links whose scrape failed, or whose Claude categorization call failed, land in
+a virtual **Uncategorized** bucket on `/topics` rather than blocking them from
+showing up elsewhere.
+
+## Stack
+
+- **Next.js** (App Router) + TypeScript
+- **SQLite** via `better-sqlite3` — a single file at `data/link-library.db`, no server setup
+- **Anthropic API** (`claude-opus-5`) for topic categorization and per-topic chat
+- **`@mozilla/readability` + `jsdom`** for extracting article text from scraped HTML
+- Tailwind CSS for styling
+
+## Getting started
+
+```bash
+npm install
+```
+
+Create `.env.local` with an Anthropic API key:
+
+```bash
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env.local
+```
+
+Then run the dev server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) — it redirects to `/add`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The SQLite database is created automatically on first run at
+`data/link-library.db` (gitignored). Delete that file to start fresh.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+> Without an `ANTHROPIC_API_KEY`, adding a link still scrapes and saves it,
+> but categorization falls back to Uncategorized, and the chat endpoint
+> returns an error.
 
-## Learn More
+## Pages
 
-To learn more about Next.js, take a look at the following resources:
+| Route | Description |
+| --- | --- |
+| `/add` | Paste a URL to save it. Shows the last 5 added links with live status (polls while anything is pending), plus a retry action on failures. |
+| `/timeline` | Every link, newest first — title, domain, topic badge, date. |
+| `/topics` | One card per topic with a link count, including the Uncategorized bucket. |
+| `/topics/[topic]` | Links saved under that topic, plus a chat box scoped to their content. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API routes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Route | Description |
+| --- | --- |
+| `POST /api/links` | Add a link. Saves it as `pending` and returns immediately; scraping + categorization run in the background. |
+| `GET /api/links` | All links, newest first. |
+| `POST /api/links/[id]/retry` | Re-run scrape + categorization for a link (e.g. after a failure). |
+| `GET /api/topics` | Distinct topics with link counts. |
+| `GET /api/topics/[topic]` | Links saved under a topic. |
+| `POST /api/topics/[topic]/chat` | Send a chat message; Claude responds using only that topic's saved content. |
 
-## Deploy on Vercel
+## Data model
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Single `links` table — no separate topics table. Distinct topics are computed
+by grouping links, which keeps things simple and easy to change later.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sql
+CREATE TABLE links (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url TEXT NOT NULL,
+  title TEXT,
+  description TEXT,
+  full_text TEXT,        -- scraped article body, used as chat context
+  topic TEXT,             -- assigned by Claude; NULL until categorized (or if categorization failed)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  status TEXT NOT NULL DEFAULT 'pending'  -- 'pending' | 'ready' | 'failed'
+);
+```
+
+## Notable decisions
+
+- **Chat history is not persisted.** Each topic's conversation lives in React
+  state on the client and resets on reload — there's no `chat_messages` table.
+- **"Background" processing is just an un-awaited async call**, not a real
+  queue. This app runs as a single long-lived local Node process
+  (`next dev` / `next start`), so that's enough for a demo; the `/add` page
+  polls `GET /api/links` to reflect status changes.
+- **Failed links don't block anything.** They still show up in `/timeline`
+  with a `Failed` badge and a retry button, and (along with any link whose
+  categorization call failed) get grouped into a virtual `Uncategorized`
+  topic rather than a real topic table row.
+
+## Non-goals
+
+- No auth, no multi-user
+- No manual topic editing/reassignment
+- No persisted chat history
