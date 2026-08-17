@@ -1,11 +1,44 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
 }
+
+// Small, tight overrides matching the chat bubble's existing text-sm style
+// (rather than a generic prose block, which needs retuning to sit well in a
+// narrow 85%-width bubble). Citation links open in a new tab like every
+// other outbound link in the app.
+const markdownComponents: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => (
+    <ul className="mb-2 list-disc space-y-1 pl-4 last:mb-0">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="mb-2 list-decimal space-y-1 pl-4 last:mb-0">{children}</ol>
+  ),
+  li: ({ children }) => <li>{children}</li>,
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline underline-offset-2 hover:opacity-80"
+    >
+      {children}
+    </a>
+  ),
+  code: ({ children }) => (
+    <code className="rounded bg-black/10 px-1 py-0.5 text-[0.85em] dark:bg-white/10">
+      {children}
+    </code>
+  ),
+};
 
 export default function TopicChat({ topic }: { topic: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -68,13 +101,19 @@ export default function TopicChat({ topic }: { topic: string }) {
         {messages.map((m, i) => (
           <div
             key={i}
-            className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+            className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
               m.role === "user"
-                ? "self-end bg-black text-white dark:bg-white dark:text-black"
+                ? "self-end whitespace-pre-wrap bg-black text-white dark:bg-white dark:text-black"
                 : "self-start bg-black/5 dark:bg-white/10"
             }`}
           >
-            {m.content}
+            {m.role === "assistant" ? (
+              <ReactMarkdown components={markdownComponents}>
+                {m.content}
+              </ReactMarkdown>
+            ) : (
+              m.content
+            )}
           </div>
         ))}
         {sending && (

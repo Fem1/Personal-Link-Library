@@ -41,8 +41,11 @@ export default function TopicLinkList({
           to the sidebar's available height, scrolling independently of
           the rest of the page. */}
       <ul className="flex flex-col divide-y divide-black/10 dark:divide-white/10 md:min-h-0 md:flex-1 md:overflow-y-auto">
-        {links.map((link) => (
+        {links.map((link, i) => (
           <li key={link.id} className="flex items-center gap-2 py-2">
+            <span className="w-5 flex-shrink-0 text-right text-xs text-black/40 dark:text-white/40">
+              {i + 1}.
+            </span>
             <a
               href={link.url}
               target="_blank"

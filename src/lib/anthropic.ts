@@ -83,20 +83,34 @@ export async function chatAboutTopic(params: {
   const { topic, links, history, message } = params;
   const client = getClient();
 
+  // Numbered in the same order getLinksByTopic returns them, which is the
+  // same order/query the topic page's sidebar renders from — so these
+  // numbers already line up with what the user sees there.
   const context = links
     .map((link, i) => {
       const body = (link.full_text || "").slice(0, MAX_CHARS_PER_LINK);
-      return `[Link ${i + 1}] "${link.title || link.url}" (${link.url})\n${body}`;
+      return `[${i + 1}] "${link.title || link.url}" (${link.url})\n${body}`;
     })
     .join("\n\n---\n\n");
 
-  const system = `You are a sparring partner for the topic "${topic}". Answer only using the content of the links below. Cite which link(s) you're drawing from by their title or number.
+  const system = `You are a sparring partner for the topic "${topic}". Answer only using the content of the links below. Cite which link(s) you're drawing from.
+
+When citing a source, reference it by its number as a markdown link to its exact URL from below — e.g. [3](https://example.com/article) — not as plain text like "Link 3" or "[3]" alone. The number in brackets IS the link text; the URL must exactly match the one given for that numbered source.
+
+Keep answers short and direct — a few sentences by default, not paragraphs. Skip preamble/hedging ("Based on the links provided..." etc) — just answer. Use bullet points only when listing multiple distinct things; otherwise plain sentences. If the question is broad and a fuller answer is genuinely needed, it's fine to go longer — but default to brief.
 
 ${context}`;
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 1024,
+    max_tokens: 2048,
+    // Low reasoning effort: this is grounded retrieval/synthesis over a
+    // handful of provided links, not a task that benefits from heavy
+    // deliberation — and without capping it, thinking tokens can eat
+    // most or all of max_tokens before any visible answer is written
+    // (observed: an 1024-max_tokens call spending 1349 tokens thinking
+    // and returning an empty reply). Same pattern as categorizeLink.
+    output_config: { effort: "low" },
     system,
     messages: [
       ...history.map((m) => ({ role: m.role, content: m.content })),
