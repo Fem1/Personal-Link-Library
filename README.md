@@ -73,7 +73,7 @@ The SQLite database is created automatically on first run at
 
 | Route | Description |
 | --- | --- |
-| `POST /api/links` | Add a link. Saves it as `pending` and returns immediately; scraping + categorization run in the background. |
+| `POST /api/links` | Add a link. Saves it as `pending` and returns immediately; scraping + categorization run in the background. CORS-open (`Access-Control-Allow-Origin: *`) so the [bookmarklet](#bookmarklet) can call it cross-origin from whatever page you're on. |
 | `GET /api/links` | All links, newest first. |
 | `POST /api/links/[id]/retry` | Re-run scrape + categorization for a link (e.g. after a failure). |
 | `GET /api/topics` | Distinct topics with link counts. |
@@ -97,6 +97,26 @@ CREATE TABLE links (
   status TEXT NOT NULL DEFAULT 'pending'  -- 'pending' | 'ready' | 'failed'
 );
 ```
+
+## Bookmarklet
+
+A bookmark whose URL is a `javascript:` snippet, so clicking it on any page
+sends that page's URL straight to your locally-running Link Library — no need
+to copy/paste into `/add`.
+
+```
+javascript:(function(){fetch('http://localhost:3000/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:window.location.href})}).then(function(r){if(r.status===201){alert('Saved!');}else if(r.status===409){alert('Already saved');}else{alert('Failed - is the app running?');}}).catch(function(){alert('Failed - is the app running?');});})();
+```
+
+**Install (Chrome or Safari):**
+1. Make sure your bookmarks bar is visible (Chrome: `Cmd+Shift+B`; Safari: `View > Show Favorites Bar`).
+2. Bookmark any page, then edit that bookmark:
+   - Chrome: right-click the bookmarks bar → **Add page** (or right-click an existing bookmark → **Edit**).
+   - Safari: **Bookmarks > Add Bookmark**, then **Bookmarks > Edit Bookmarks** to change its address.
+3. Name it something like **Save to Link Library**, and paste the snippet above as the URL/address (replacing whatever's there — it must start with `javascript:`).
+4. Save. With the app running (`npm run dev`), click the bookmark on any page to save it.
+
+Only works while the dev server is running locally on this machine — clicking it with the app stopped shows "Failed - is the app running?".
 
 ## Notable decisions
 

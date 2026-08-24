@@ -11,17 +11,41 @@ export async function GET() {
   return NextResponse.json({ links });
 }
 
+// POST needs to be reachable cross-origin: the save bookmarklet runs in the
+// context of whatever page you're on (e.g. nytimes.com), not localhost:3000.
+// This is a personal local demo, so allow-all is fine — no cookies/auth to
+// leak, and nothing here is sensitive beyond "someone can add a link".
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function corsJson(body: unknown, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: { ...CORS_HEADERS, ...init?.headers },
+  });
+}
+
+// Cross-origin POST with a JSON body isn't a "simple request", so the
+// browser sends a preflight OPTIONS before it — this has to succeed for
+// the bookmarklet's fetch() to be allowed to fire at all.
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return corsJson({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const url = (body as { url?: unknown })?.url;
   if (typeof url !== "string" || url.trim().length === 0) {
-    return NextResponse.json({ error: "url is required" }, { status: 400 });
+    return corsJson({ error: "url is required" }, { status: 400 });
   }
 
   let parsed: URL;
@@ -29,7 +53,7 @@ export async function POST(request: NextRequest) {
     parsed = new URL(url.trim());
     if (!/^https?:$/.test(parsed.protocol)) throw new Error("bad protocol");
   } catch {
-    return NextResponse.json(
+    return corsJson(
       { error: "url must be a valid http(s) URL" },
       { status: 400 }
     );
@@ -37,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const duplicate = findDuplicateLink(parsed.toString());
   if (duplicate) {
-    return NextResponse.json(
+    return corsJson(
       {
         error: "Already saved",
         existing: {
@@ -62,5 +86,5 @@ export async function POST(request: NextRequest) {
     console.error(`Unhandled error processing link ${link.id}:`, err);
   });
 
-  return NextResponse.json({ link }, { status: 201 });
+  return corsJson({ link }, { status: 201 });
 }
