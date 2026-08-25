@@ -33,3 +33,17 @@ export function saveChatMessage(
 export function clearChatMessages(topic: string): void {
   getDb().prepare("DELETE FROM chat_messages WHERE topic = ?").run(topic);
 }
+
+/**
+ * Move a topic's chat history to another topic's — used when merging
+ * topics (linkService.mergeTopics) so a merge doesn't orphan the source
+ * topic's conversation. Unlike links.topic, chat_messages.topic is always
+ * the literal display string (including "Uncategorized" for that virtual
+ * page, which has no grouping logic to collide with) and is NOT NULL, so
+ * this needs no null-normalization the way link reassignment does.
+ */
+export function reassignChatTopic(sourceTopic: string, targetTopic: string): void {
+  getDb()
+    .prepare("UPDATE chat_messages SET topic = ? WHERE topic = ?")
+    .run(targetTopic, sourceTopic);
+}

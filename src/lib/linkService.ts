@@ -4,6 +4,7 @@ import { UNCATEGORIZED_TOPIC } from "./constants";
 import { scrapeUrl } from "./scrape";
 import { categorizeLink } from "./anthropic";
 import { normalizeUrl } from "./format";
+import { reassignChatTopic } from "./chatService";
 
 export function getAllLinks(): LinkRow[] {
   return getDb()
@@ -149,4 +150,63 @@ export async function retryLink(id: number): Promise<void> {
 export function deleteLink(id: number): boolean {
   const info = getDb().prepare("DELETE FROM links WHERE id = ?").run(id);
   return info.changes > 0;
+}
+
+// "Uncategorized" is a display label for topic IS NULL (or a failed scrape),
+// not a real stored value — see the NULL-vs-string comment in processLink
+// above. Move/merge need the same normalization so picking it (or typing it
+// as a "new topic") routes back into the virtual bucket instead of creating
+// a second, colliding topic literally named "Uncategorized".
+function normalizeTopicTarget(topic: string): string | null {
+  return topic.toLowerCase() === UNCATEGORIZED_TOPIC.toLowerCase()
+    ? null
+    : topic;
+}
+
+/**
+ * Reassign a single link to a different topic (manual fix for
+ * categorization drift, e.g. merging "AI" and "Artificial Intelligence").
+ * Caller is expected to have already validated `topic` is non-empty.
+ */
+export function updateLinkTopic(id: number, topic: string): LinkRow | undefined {
+  getDb()
+    .prepare("UPDATE links SET topic = ? WHERE id = ?")
+    .run(normalizeTopicTarget(topic.trim()), id);
+  return getLinkById(id);
+}
+
+/**
+ * Bulk-reassign every link under `sourceTopic` to `targetTopic`. Only
+ * touches non-failed rows — a failed link's stale topic value is already
+ * invisible everywhere except the virtual Uncategorized bucket (status
+ * alone routes it there), so there's nothing meaningful to migrate.
+ * Returns how many rows were updated.
+ */
+export function mergeTopics(sourceTopic: string, targetTopic: string): number {
+  const targetValue = normalizeTopicTarget(targetTopic);
+  const db = getDb();
+
+  let changes: number;
+  if (sourceTopic === UNCATEGORIZED_TOPIC) {
+    const info = db
+      .prepare(
+        "UPDATE links SET topic = ? WHERE topic IS NULL AND status != 'failed'"
+      )
+      .run(targetValue);
+    changes = info.changes;
+  } else {
+    const info = db
+      .prepare(
+        "UPDATE links SET topic = ? WHERE topic = ? AND status != 'failed'"
+      )
+      .run(targetValue, sourceTopic);
+    changes = info.changes;
+  }
+
+  // Carry the source topic's chat history along too, rather than orphaning
+  // it — chat_messages always keys on the literal display string (see
+  // reassignChatTopic), so this needs the raw targetTopic, not targetValue.
+  reassignChatTopic(sourceTopic, targetTopic);
+
+  return changes;
 }

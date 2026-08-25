@@ -67,8 +67,8 @@ The SQLite database is created automatically on first run at
 | --- | --- |
 | `/add` | Paste a URL to save it. Shows the last 5 added links with live status (polls while anything is pending), plus a retry action on failures. |
 | `/timeline` | Every link, newest first — title, domain, topic badge, date. |
-| `/topics` | One card per topic with a link count, including the Uncategorized bucket. |
-| `/topics/[topic]` | Links saved under that topic, plus a chat box scoped to their content. |
+| `/topics` | One card per topic with a link count, including the Uncategorized bucket. Each card has a "Merge into…" option to fold it into another topic. |
+| `/topics/[topic]` | Links saved under that topic (each with a "Move" option to reassign it elsewhere), plus a chat box scoped to their content. |
 
 ## API routes
 
@@ -79,9 +79,11 @@ The SQLite database is created automatically on first run at
 | `POST /api/links/[id]/retry` | Re-run scrape + categorization for a link (e.g. after a failure). |
 | `GET /api/topics` | Distinct topics with link counts. |
 | `GET /api/topics/[topic]` | Links saved under a topic. |
+| `POST /api/topics/[topic]/merge` | Body `{ into }`. Bulk-reassigns every (non-failed) link from this topic to another, including chat history; the source topic then disappears. |
 | `GET /api/topics/[topic]/chat` | That topic's chat history, oldest first. |
 | `POST /api/topics/[topic]/chat` | Send a chat message; Claude responds using only that topic's saved content. Persists both the user message and the reply. |
 | `DELETE /api/topics/[topic]/chat` | Clear a topic's chat history. |
+| `PATCH /api/links/[id]` | Body `{ topic }`. Reassign a single link's topic — the manual fix for categorization drift (e.g. "AI" vs "Artificial Intelligence" ending up separate). |
 
 ## Data model
 
@@ -141,6 +143,24 @@ Only works while the dev server is running locally on this machine — clicking 
   own running conversation as `history` on each `POST` — the table is a
   write-through log for reload/revisit, not (yet) the server-side source of
   truth for what gets sent to Claude each turn.
+- **Reassigning a link's topic only applies to `status: 'ready'` links.**
+  Failed links never show under a real topic regardless of their stored
+  `topic` value (only status routes them to Uncategorized), so moving one
+  would silently do nothing visible; a pending link's topic can still be
+  overwritten by categorization finishing moments later, so it's excluded
+  too.
+- **"Uncategorized" as a move/merge target maps to `topic = NULL`**, not the
+  literal string — writing the literal string would create a second,
+  colliding topic indistinguishable from the real virtual bucket in the UI
+  but broken in `getDistinctTopics()`'s grouping. Typing "uncategorized" (any
+  case) as a new topic name is treated the same way.
+- **Merging topics carries the source topic's chat history along too**
+  (`chat_messages.topic` gets bulk-reassigned the same as `links.topic`), so
+  a merge doesn't orphan its conversation. Moving a single link does not do
+  this — if moving drains a topic down to zero links, its (unlikely to
+  exist) chat history is simply left behind under the now-inaccessible old
+  topic string rather than auto-migrated or auto-deleted; a demo-scale
+  tradeoff, not something to build around.
 - **"Background" processing is just an un-awaited async call**, not a real
   queue. This app runs as a single long-lived local Node process
   (`next dev` / `next start`), so that's enough for a demo; the `/add` page
@@ -153,7 +173,8 @@ Only works while the dev server is running locally on this machine — clicking 
 ## Non-goals
 
 - No auth, no multi-user
-- No manual topic editing/reassignment (so chat history staying tied to the
-  topic string, not a stable id, isn't a concern yet)
+- No undo/history of topic reassignments or merges — confirm steps are the
+  only safety net
+- No auto-suggestion of similar topics worth merging — purely manual
 - No editing/deleting individual past chat messages — only clearing a
   topic's entire history at once
