@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLinksByTopic } from "@/lib/linkService";
+import { getChatMessages } from "@/lib/chatService";
 import TopicPageLayout from "@/components/TopicPageLayout";
 
 // Reads straight from SQLite on every request — never statically cache.
@@ -17,6 +18,8 @@ export default async function TopicDetailPage({
     notFound();
   }
 
+  const messages = getChatMessages(decoded);
+
   return (
     <div className="flex flex-col gap-8">
       <div>
@@ -29,7 +32,11 @@ export default async function TopicDetailPage({
         <h1 className="mt-1 text-xl font-semibold">{decoded}</h1>
       </div>
 
-      <TopicPageLayout topic={decoded} initialLinks={links} />
+      <TopicPageLayout
+        topic={decoded}
+        initialLinks={links}
+        initialMessages={messages}
+      />
     </div>
   );
 }

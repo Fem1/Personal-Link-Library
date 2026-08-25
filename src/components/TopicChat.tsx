@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import type { ChatMessageRow } from "@/lib/types";
+import ClearChatButton from "./ClearChatButton";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -40,8 +42,16 @@ const markdownComponents: Components = {
   ),
 };
 
-export default function TopicChat({ topic }: { topic: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export default function TopicChat({
+  topic,
+  initialMessages,
+}: {
+  topic: string;
+  initialMessages: ChatMessageRow[];
+}) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    initialMessages.map((m) => ({ role: m.role, content: m.content }))
+  );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +94,11 @@ export default function TopicChat({ topic }: { topic: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-lg border border-black/10 dark:border-white/10">
-      <div className="flex-shrink-0 border-b border-black/10 px-4 py-3 text-sm font-medium dark:border-white/10">
-        Chat about &ldquo;{topic}&rdquo;
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-black/10 px-4 py-3 text-sm font-medium dark:border-white/10">
+        <span>Chat about &ldquo;{topic}&rdquo;</span>
+        {messages.length > 0 && (
+          <ClearChatButton topic={topic} onCleared={() => setMessages([])} />
+        )}
       </div>
 
       {/* Mobile: fixed-height scroll box (unchanged). Desktop: fills

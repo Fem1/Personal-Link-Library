@@ -35,6 +35,16 @@ function createConnection(): Database.Database {
       status TEXT NOT NULL DEFAULT 'pending',
       image_url TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      topic TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_topic ON chat_messages(topic);
   `);
 
   // Lightweight migration for DBs created before image_url existed —

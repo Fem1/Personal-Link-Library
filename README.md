@@ -19,7 +19,8 @@ one person.
 5. Browse everything chronologically on **/timeline**, or grouped by topic on
    **/topics**. Each topic page has a chat box scoped to just that topic's
    saved content — Claude answers only from what you've saved and cites which
-   link(s) it's drawing from.
+   link(s) it's drawing from. The conversation is saved per topic, so it's
+   still there next time you visit (until you clear it).
 
 Links whose scrape failed, or whose Claude categorization call failed, land in
 a virtual **Uncategorized** bucket on `/topics` rather than blocking them from
@@ -78,12 +79,14 @@ The SQLite database is created automatically on first run at
 | `POST /api/links/[id]/retry` | Re-run scrape + categorization for a link (e.g. after a failure). |
 | `GET /api/topics` | Distinct topics with link counts. |
 | `GET /api/topics/[topic]` | Links saved under a topic. |
-| `POST /api/topics/[topic]/chat` | Send a chat message; Claude responds using only that topic's saved content. |
+| `GET /api/topics/[topic]/chat` | That topic's chat history, oldest first. |
+| `POST /api/topics/[topic]/chat` | Send a chat message; Claude responds using only that topic's saved content. Persists both the user message and the reply. |
+| `DELETE /api/topics/[topic]/chat` | Clear a topic's chat history. |
 
 ## Data model
 
-Single `links` table — no separate topics table. Distinct topics are computed
-by grouping links, which keeps things simple and easy to change later.
+No separate topics table — distinct topics are computed by grouping `links`,
+which keeps things simple and easy to change later.
 
 ```sql
 CREATE TABLE links (
@@ -94,9 +97,22 @@ CREATE TABLE links (
   full_text TEXT,        -- scraped article body, used as chat context
   topic TEXT,             -- assigned by Claude; NULL until categorized (or if categorization failed)
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  status TEXT NOT NULL DEFAULT 'pending'  -- 'pending' | 'ready' | 'failed'
+  status TEXT NOT NULL DEFAULT 'pending',  -- 'pending' | 'ready' | 'failed'
+  image_url TEXT          -- thumbnail, extracted during scraping; NULL if none found
+);
+
+CREATE TABLE chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  topic TEXT NOT NULL,    -- matches the topic string above, not a foreign key
+  role TEXT NOT NULL,     -- 'user' | 'assistant'
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 ```
+
+`chat_messages.topic` is a plain string match against `links.topic`, not a
+foreign key — there's no topic table to key against, and topic
+renaming/reassignment isn't built yet, so this doesn't need to handle that.
 
 ## Bookmarklet
 
@@ -120,8 +136,11 @@ Only works while the dev server is running locally on this machine — clicking 
 
 ## Notable decisions
 
-- **Chat history is not persisted.** Each topic's conversation lives in React
-  state on the client and resets on reload — there's no `chat_messages` table.
+- **Chat history is persisted per topic** in `chat_messages`, keyed by the
+  topic string (see [Data model](#data-model)). The client still sends its
+  own running conversation as `history` on each `POST` — the table is a
+  write-through log for reload/revisit, not (yet) the server-side source of
+  truth for what gets sent to Claude each turn.
 - **"Background" processing is just an un-awaited async call**, not a real
   queue. This app runs as a single long-lived local Node process
   (`next dev` / `next start`), so that's enough for a demo; the `/add` page
@@ -134,5 +153,7 @@ Only works while the dev server is running locally on this machine — clicking 
 ## Non-goals
 
 - No auth, no multi-user
-- No manual topic editing/reassignment
-- No persisted chat history
+- No manual topic editing/reassignment (so chat history staying tied to the
+  topic string, not a stable id, isn't a concern yet)
+- No editing/deleting individual past chat messages — only clearing a
+  topic's entire history at once

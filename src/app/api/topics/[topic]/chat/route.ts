@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLinksByTopic } from "@/lib/linkService";
+import {
+  clearChatMessages,
+  getChatMessages,
+  saveChatMessage,
+} from "@/lib/chatService";
 import { chatAboutTopic } from "@/lib/anthropic";
 
 interface ChatTurn {
   role: "user" | "assistant";
   content: string;
+}
+
+export async function GET(
+  _request: Request,
+  ctx: RouteContext<"/api/topics/[topic]/chat">
+) {
+  const { topic } = await ctx.params;
+  const decoded = decodeURIComponent(topic);
+  const messages = getChatMessages(decoded);
+  return NextResponse.json({ messages });
 }
 
 export async function POST(
@@ -47,13 +62,20 @@ export async function POST(
     );
   }
 
+  const trimmedMessage = message.trim();
+  // Persist the user's message up front, independent of whether the Claude
+  // call below succeeds — it was genuinely sent, and the client already
+  // shows it immediately regardless of how the reply turns out.
+  saveChatMessage(decoded, "user", trimmedMessage);
+
   try {
     const reply = await chatAboutTopic({
       topic: decoded,
       links,
       history,
-      message: message.trim(),
+      message: trimmedMessage,
     });
+    saveChatMessage(decoded, "assistant", reply);
     return NextResponse.json({ reply });
   } catch (err) {
     console.error(`Chat failed for topic "${decoded}":`, err);
@@ -62,4 +84,14 @@ export async function POST(
       { status: 502 }
     );
   }
+}
+
+export async function DELETE(
+  _request: Request,
+  ctx: RouteContext<"/api/topics/[topic]/chat">
+) {
+  const { topic } = await ctx.params;
+  const decoded = decodeURIComponent(topic);
+  clearChatMessages(decoded);
+  return NextResponse.json({ ok: true });
 }

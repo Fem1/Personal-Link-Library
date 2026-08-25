@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { LinkRow } from "@/lib/types";
+import type { ChatMessageRow, LinkRow } from "@/lib/types";
 import TopicChat from "./TopicChat";
 import TopicLinkList from "./TopicLinkList";
 
@@ -15,16 +15,18 @@ import TopicLinkList from "./TopicLinkList";
 export default function TopicPageLayout({
   topic,
   initialLinks,
+  initialMessages,
 }: {
   topic: string;
   initialLinks: LinkRow[];
+  initialMessages: ChatMessageRow[];
 }) {
   const [open, setOpen] = useState(true);
 
   return (
     <div className="flex flex-col gap-4 md:h-[calc(100vh-16rem)] md:min-h-[420px] md:flex-row md:items-stretch">
       <div className="flex min-w-0 flex-col md:h-full md:flex-[3]">
-        <TopicChat topic={topic} />
+        <TopicChat topic={topic} initialMessages={initialMessages} />
       </div>
 
       <button

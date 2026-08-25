@@ -21,3 +21,13 @@ export type ExistingLinkSummary = Pick<
   LinkRow,
   "id" | "url" | "title" | "topic" | "status" | "created_at"
 >;
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessageRow {
+  id: number;
+  topic: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}
